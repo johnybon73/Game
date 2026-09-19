@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Banana Jump 3D</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#8ed8ff;font-family:Arial,sans-serif;touch-action:none}
+#game{position:fixed;inset:0}
+#ui{position:fixed;inset:0;pointer-events:none;color:#fff;text-align:center;text-shadow:0 3px 6px #0008}
+#score{font-size:56px;font-weight:900;margin-top:35px}
+#msg{position:absolute;bottom:8vh;width:100%;font-size:24px;font-weight:800}
+#hint{position:absolute;top:105px;width:100%;font-size:15px;opacity:.85}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="ui"><div id="score">0</div><div id="hint">TAP TO JUMP</div><div id="msg"></div></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.min.js"></script>
+<script>
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x8ed8ff);
+scene.fog=new THREE.Fog(0x8ed8ff,18,55);
+
+const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,100);
+camera.position.set(0,2.2,10);
+camera.lookAt(0,1,0);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+document.getElementById('game').appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x5a8f55,1.5));
+const sun=new THREE.DirectionalLight(0xffffff,2);
+sun.position.set(-5,10,8); sun.castShadow=true; scene.add(sun);
+
+const ground=new THREE.Mesh(
+ new THREE.PlaneGeometry(50,100),
+ new THREE.MeshStandardMaterial({color:0x5fc46b,roughness:.9})
+);
+ground.rotation.x=-Math.PI/2; ground.position.set(0,-6.2,-18); scene.add(ground);
+
+const banana=new THREE.Group();
+banana.position.set(0,1,4);
+scene.add(banana);
+
+const yellow=new THREE.MeshStandardMaterial({color:0xffd92f,roughness:.65});
+const dark=new THREE.MeshStandardMaterial({color:0x70451d,roughness:.8});
+const body=new THREE.Mesh(new THREE.SphereGeometry(.9,24,18),yellow);
+body.scale.set(.58,1.25,.58); banana.add(body);
+const stem=new THREE.Mesh(new THREE.CylinderGeometry(.13,.18,.45,12),dark);
+stem.position.y=1.05; banana.add(stem);
+
+let vy=0, gravity=-15, jump=6.5, speed=7, score=0, dead=false;
+const obstacles=[];
+const scoreEl=document.getElementById('score'), msgEl=document.getElementById('msg');
+
+function makePipe(x,y,z){
+ const g=new THREE.Group();
+ const m=new THREE.MeshStandardMaterial({color:0x56b95c,roughness:.8});
+ const cyl=new THREE.Mesh(new THREE.CylinderGeometry(1.25,1.25,6,24),m);
+ cyl.rotation.z=Math.PI/2; cyl.position.set(x,y,z);
+ g.add(cyl); return g;
+}
+function spawn(z){
+ const root=new THREE.Group();
+ root.position.z=z;
+ const gap=-1.5+Math.random()*4.5;
+ root.userData.gap=gap;
+ root.add(makePipe(0,gap+4.7,0));
+ root.add(makePipe(0,gap-4.7,0));
+ scene.add(root); obstacles.push(root);
+}
+function reset(){
+ obstacles.splice(0).forEach(o=>scene.remove(o));
+ score=0; scoreEl.textContent='0'; dead=false; msgEl.textContent='';
+ banana.position.set(0,1,4); vy=0;
+ for(let i=0;i<5;i++) spawn(-12-i*10);
+}
+function flap(){
+ if(dead){reset(); return}
+ vy=jump;
+}
+addEventListener('pointerdown',flap,{passive:true});
+addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='ArrowUp')flap()});
+reset();
+
+let last=performance.now();
+function animate(now){
+ requestAnimationFrame(animate);
+ const dt=Math.min((now-last)/1000,.033); last=now;
+ if(!dead){
+   vy+=gravity*dt;
+   banana.position.y+=vy*dt;
+   banana.rotation.z=THREE.MathUtils.lerp(banana.rotation.z,THREE.MathUtils.clamp(-vy*.07,-.6,.6),dt*7);
+   for(let i=obstacles.length-1;i>=0;i--){
+     const o=obstacles[i]; o.position.z+=speed*dt;
+     if(o.position.z>8){
+       scene.remove(o); obstacles.splice(i,1); spawn(-22);
+       score++; scoreEl.textContent=score;
+     }else if(Math.abs(o.position.z-banana.position.z)<1.3){
+       if(Math.abs(banana.position.y-o.userData.gap)>2.2) end();
+     }
+   }
+   if(banana.position.y<-6||banana.position.y>8) end();
+ }
+ renderer.render(scene,camera);
+}
+function end(){dead=true; msgEl.textContent='GAME OVER • TAP TO RESTART';}
+animate(performance.now());
+
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
